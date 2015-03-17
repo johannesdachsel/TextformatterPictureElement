@@ -1,0 +1,131 @@
+<?php
+
+class TextformatterPicture extends Textformatter implements ConfigurableModule{
+
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Picture Element Textformatter', 
+			'version' => 001, 
+			'summary' => "Wraps all images in a textfield in picture elements." ,
+			'author' => 'Johannes Dachsel'
+		); 
+	}
+
+	 
+	protected static $defaultSettings = array(
+		"fallback" => 670,
+		"queries" => "{\"800\":\"(min-width: 45em)\"}"
+	);
+
+	protected $data = array(); // module data
+
+
+	public function __construct() {
+		foreach(self::$defaultSettings as $key => $value) {
+			$this->data[$key] = $value;
+		}
+	}
+    
+	public function __get($key) {
+		return isset($this->data[$key]) ? $this->data[$key] : null;
+	}
+
+    public function __set($key, $value) {
+		$this->data[$key] = $value;
+	}
+		
+	
+	public function formatValue(Page $page, Field $field, &$str) {		
+		
+		// Get all images
+		preg_match_all('/<img[^>]+>/i',$str, $images);
+		$images = $images[0];
+		$sources = json_decode($this->queries, true);
+		krsort($sources);
+		
+		$fallback = $this->fallback;
+		
+		
+		if(count($images) == 0){
+			return;
+		} else {
+			$filePath = wire("config")->urls->files;
+			
+			foreach($images as $image){
+				$pictureElem = "";
+				
+				// Get src attribute
+				$imageSrc = array();
+				preg_match('/src="(.*?)"/', $image, $imageSrc);	
+				$imageSrc = $imageSrc[1];
+				
+				// Get original page ID
+				$tmp = explode("/", str_replace($filePath, "", $imageSrc));
+				$sourceId = $tmp[0];
+				
+				// Get original file name in case image has been resized
+				$imageFileString = $tmp[1];
+				$imageFileArray = explode(".", $imageFileString);
+				// @todo: use regex to get base file name
+				//preg_match("/(.+)(\\.\\d)/", $imageFileString, $imageFileArray);
+				$imageFileName = $imageFileArray[0];
+				$imageFileExt = pathinfo($imageFileString, PATHINFO_EXTENSION);
+				$sourcePage = wire("pages")->get($sourceId);
+				
+				// Get original image object
+				foreach($sourcePage->fields as $field){
+					if($field->type == "FieldtypeImage" && $sourcePage->get($field->name)->get("name=".$imageFileName.".".$imageFileExt)){
+						$sourceImage = $sourcePage->get($field->name)->get("name=".$imageFileName.".".$imageFileExt);	
+					}
+				}
+				
+				// Create picture element
+				$pictureElem .= "<picture>";
+				foreach($sources as $size => $query){
+					// Prevent upscaling
+					if($sourceImage->width > $size){
+						$pictureElem .= "<source media='".$query."' srcset='".$sourceImage->size($size)->url."'>";
+					} else {
+						$pictureElem .= "<source media='".$query."' srcset='".$sourceImage->url."'>";
+						break;
+					}
+				}
+				
+				// Prevent fallback image from upscaling
+				if($sourceImage->width > $fallback){
+					$fallbackImage = $sourceImage->size($fallback);
+				} else {
+					$fallbackImage = $sourceImage;
+				}
+				
+				$pictureElem .= "<img src='".$fallbackImage->url."' alt='".$sourceImage->description."'>";
+				$pictureElem .= "</picture>";
+				
+				// Replace image with picture element
+				$str = str_replace($image, $pictureElem, $str);
+			}
+		}
+	}
+	
+	
+	public static function getModuleConfigInputfields(array $data) {
+        $data = array_merge(self::$defaultSettings, $data);
+        $moduleConfig = new InputfieldWrapper(); 
+ 
+        // fallback image size
+        $fallbackField = wire('modules')->get('InputfieldInteger');
+        $fallbackField->name = 'fallback';
+        $fallbackField->label = "Fallback image size";
+        if(isset($data['fallback'])) $fallbackField->value = $data['fallback'];
+        $moduleConfig->add($fallbackField);
+        
+        // queries as JSON
+        $queriesField = wire('modules')->get('InputfieldText');
+        $queriesField->name = 'queries';
+        $queriesField->label = "Sizes and queries as JSON, e.g. {\"800\":\"(min-width: 45em)\"}";
+        if(isset($data['queries'])) $queriesField->value = $data['queries'];
+        $moduleConfig->add($queriesField);
+
+        return $moduleConfig; 
+    }	
+}
