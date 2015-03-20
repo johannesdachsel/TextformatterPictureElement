@@ -5,7 +5,7 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 	public static function getModuleInfo() {
 		return array(
 			'title' => 'Picture Element Textformatter', 
-			'version' => 001, 
+			'version' => 100, 
 			'summary' => "Wraps all images in a textfield in picture elements." ,
 			'author' => 'Johannes Dachsel'
 		); 
@@ -14,7 +14,7 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 	 
 	protected static $defaultSettings = array(
 		"fallback" => 670,
-		"queries" => "{\"800\":\"(min-width: 45em)\"}"
+		"queries" => "800=(min-width: 45em)"
 	);
 
 	protected $data = array(); // module data
@@ -40,7 +40,14 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 		// Get all images
 		preg_match_all('/<img[^>]+>/i',$str, $images);
 		$images = $images[0];
-		$sources = json_decode($this->queries, true);
+		$queries = explode("\n", $this->queries);
+		$sources = array();
+		
+		for($i = 0; $i < count($queries); $i++){
+			$query = explode("=", $queries[$i]);
+			$sources[$query[0]] = $query[1];	
+		}
+		
 		krsort($sources);
 		
 		$fallback = $this->fallback;
@@ -52,6 +59,7 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 			$filePath = wire("config")->urls->files;
 			
 			foreach($images as $image){
+				
 				$pictureElem = "";
 				
 				// Get src attribute
@@ -72,6 +80,8 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 				$imageFileExt = pathinfo($imageFileString, PATHINFO_EXTENSION);
 				$sourcePage = wire("pages")->get($sourceId);
 				
+				//print_r($imageFileArray);
+				
 				// Get original image object
 				foreach($sourcePage->fields as $field){
 					if($field->type == "FieldtypeImage" && $sourcePage->get($field->name)->get("name=".$imageFileName.".".$imageFileExt)){
@@ -84,10 +94,7 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 				foreach($sources as $size => $query){
 					// Prevent upscaling
 					if($sourceImage->width > $size){
-						$pictureElem .= "<source media='".$query."' srcset='".$sourceImage->size($size)->url."'>";
-					} else {
-						$pictureElem .= "<source media='".$query."' srcset='".$sourceImage->url."'>";
-						break;
+						$pictureElem .= "<source media='".$query."' srcset='".$sourceImage->size($size)->url."'>";	
 					}
 				}
 				
@@ -104,6 +111,7 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 				// Replace image with picture element
 				$str = str_replace($image, $pictureElem, $str);
 			}
+			return;
 		}
 	}
 	
@@ -120,9 +128,9 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
         $moduleConfig->add($fallbackField);
         
         // queries as JSON
-        $queriesField = wire('modules')->get('InputfieldText');
+        $queriesField = wire('modules')->get('InputfieldTextarea');
         $queriesField->name = 'queries';
-        $queriesField->label = "Sizes and queries as JSON, e.g. {\"800\":\"(min-width: 45em)\"}";
+        $queriesField->label = "Sizes and queries (one per line), e.g.: 800=(min-width: 45em)";
         if(isset($data['queries'])) $queriesField->value = $data['queries'];
         $moduleConfig->add($queriesField);
 
