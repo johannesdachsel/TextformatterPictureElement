@@ -94,13 +94,13 @@ class TextformatterPicture extends Textformatter implements ConfigurableModule{
 				foreach($sources as $size => $query){
 					// Prevent upscaling
 					if($sourceImage->width > $size){
-						$pictureElem .= "<source media='".$query."' srcset='".$sourceImage->size($size)->url."'>";	
+						$pictureElem .= "<source media='".$query."' srcset='".$sourceImage->width($size)->url."'>";	
 					}
 				}
 				
 				// Prevent fallback image from upscaling
 				if($sourceImage->width > $fallback){
-					$fallbackImage = $sourceImage->size($fallback);
+					$fallbackImage = $sourceImage->width($fallback);
 				} else {
 					$fallbackImage = $sourceImage;
 				}
